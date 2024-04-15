@@ -1,14 +1,16 @@
 # Product_performance.sql
+# How to crate relevant tables + Insert statemtents
 
 # product_usage table creation
-CREATE TABLE `product_usage` (
-  `merchant` varchar(512) DEFAULT NULL,
-  `usage_date` date DEFAULT NULL,
-  `product` varchar(512) DEFAULT NULL,
-  `api_call` varchar(512) DEFAULT NULL,
-  `usage_events` int DEFAULT NULL,
-  `usd_amount` int DEFAULT NULL
-) ;
+ CREATE TABLE product_usage 
+(
+    merchant	VARCHAR(512),
+    usage_date	date,
+    product	VARCHAR(512),
+    api_call	VARCHAR(512),
+    usage_events	INT,
+    usd_amount	INT
+); 
 
 # product_usage insert statement
 INSERT INTO product_usage (merchant, usage_date, product, api_call, usage_events, usd_amount) VALUES ('282t1vpldi', '2016-01-01', 'Basic API', 'Charge', '33', '329967');
@@ -1264,3 +1266,17 @@ INSERT INTO product_usage (merchant, usage_date, product, api_call, usage_events
 INSERT INTO product_usage (merchant, usage_date, product, api_call, usage_events, usd_amount) VALUES ('zz8yi2lz0k9', '2017-11-01', 'Cart', 'Cart.ViewItem', '6035', NULL);
 INSERT INTO product_usage (merchant, usage_date, product, api_call, usage_events, usd_amount) VALUES ('zz8yi2lz0k9', '2017-12-01', 'Cart', 'Cart.ViewItem', '5830', NULL);
 
+
+# segmentation table creation
+CREATE TABLE `segmentation` (
+  `merchant` text,
+  `segment` text
+);
+
+# segmentation table insert statement
+INSERT INTO `stripe_pp`.`segmentation`
+(`merchant`,
+`segment`)
+VALUES
+(<{merchant: }>,
+<{segment: }>);
