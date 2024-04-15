@@ -1,6 +1,4 @@
----------
-Queries
----------
+# Queries
 
 # 1) Number of distinct merchants 
 select product, count(distinct merchant) as merchant_cnt from product_usage
