@@ -2,6 +2,10 @@
 Queries
 ---------
 
-# 1) Number of distinct merchants (33)
+# 1) Number of distinct merchants 
+select product, count(distinct merchant) as merchant_cnt from product_usage
+group by product;
+
+# 2) Number of distinct merchants 
 select product, count(distinct merchant) as merchant_cnt from product_usage
 group by product;
