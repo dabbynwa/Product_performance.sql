@@ -1,9 +1,216 @@
-# Queries
+-- --- ---- --- ----- ---- --
+# Product performance queries 
+-- --- --- ---- ------- ----- 
 
-# 1) Number of distinct merchants 
-select product, count(distinct merchant) as merchant_cnt from product_usage
-group by product;
+#1. merchant_count
+SELECT 
+    COUNT(DISTINCT merchant) AS merchant_cnt
+FROM
+    product_usage;
+    
+#2. volume by year
+SELECT year(usage_date),
+    SUM(usd_amount) AS amount_processed
+FROM
+    product_usage
+    group by 1;
 
-# 2) Number of distinct merchants 
-select product, count(distinct merchant) as merchant_cnt from product_usage
-group by product;
+#3.total volume processed between the dates in view 
+SELECT 
+    SUM(usd_amount) AS amount_processed
+FROM
+    product_usage;
+
+#4. Volume by products (4 products - 'Basic API', 'Recurring', 'Marketplaces' and 'Cart')
+ with prod_vol_cte as (
+select distinct product, 
+sum(usd_amount) as amount_processed
+from product_usage
+group by product
+)
+select product, amount_processed,
+ROUND(100 * amount_processed / sum(amount_processed)
+			OVER ()) AS proc_perc  
+from prod_vol_cte
+order by 3 desc;
+
+#5. Volume by segment 
+ with prod_vol_cte as (
+select distinct segment, 
+sum(usd_amount) as amount_processed
+from product_usage join segmentation on product_usage.merchant = segmentation.merchant
+group by segment
+)
+select segment, amount_processed,
+ROUND(100 * amount_processed / sum(amount_processed)
+			OVER ()) AS proc_perc  
+from prod_vol_cte
+order by 3 desc;
+
+#6. product by API_calls 
+SELECT DISTINCT
+    product, SUM(usage_events) AS total_api_calls
+FROM
+    product_usage
+WHERE
+    api_call NOT IN ('Cart.ViewItem' , 'Cart.AddItem')
+GROUP BY 1;
+
+#7a. Merchants combining recurring and basic api products
+with main_query as (select distinct merchant, sum(usage_events) as total_events, sum(usd_amount) as amount_processed 
+from product_usage 
+where product in ('Basic API' , 'Recurring')
+and merchant in (select distinct merchant from product_usage where product = 'Basic API' and usage_date >= '2016-05-01')
+and merchant in (select distinct merchant from product_usage where product = 'Recurring')
+group by 1
+)
+select count(distinct merchant) as merchant_cnt, sum(total_events) as total_events, sum(amount_processed) as amount_processed from main_query ;
+
+#7b. Merchants using basic api products only
+SELECT DISTINCT
+    merchant,
+    product,
+    api_call,
+    SUM(usage_events) AS total_events,
+    SUM(usd_amount) AS amount_processed
+FROM
+    product_usage
+WHERE
+    product = 'Basic API'
+        AND merchant NOT IN (SELECT DISTINCT
+            merchant
+        FROM
+            product_usage
+        WHERE
+            product = 'Recurring')
+GROUP BY 1 , 2 , 3;
+
+
+ #8. Shopping Cart Abandonment 
+SELECT 
+    api_call, SUM(usage_events) AS total_usage_events
+FROM
+    product_usage
+        JOIN
+    segmentation ON product_usage.merchant = segmentation.merchant
+WHERE
+    product = 'Cart'
+        AND api_call NOT IN ('Cart.ViewItem' , 'Cart.AddItem')
+GROUP BY 1;
+
+#9. 3 merchants were using basic api before launch of recurring api. what happened to them?
+SELECT DISTINCT
+    merchant
+FROM
+    product_usage
+WHERE
+    product = 'Basic API'
+        AND usage_date < '2016-05-01';
+
+#10. get merchants that kept using basic api only after the lunch of recurring payments in '2016-05-01' (1 of them remained - awzc15rk9 | 29,957 hits/ 2,995,700 USD) 
+SELECT DISTINCT
+    merchant,
+    product,
+    api_call,
+    SUM(usage_events) AS total_events,
+    SUM(usd_amount) AS amount_processed
+FROM
+    product_usage
+WHERE
+    merchant IN (SELECT DISTINCT
+            merchant
+        FROM
+            product_usage
+        WHERE
+            product = 'Basic API'
+                AND usage_date < '2016-05-01')
+        AND merchant NOT IN (SELECT DISTINCT
+            merchant
+        FROM
+            product_usage
+        WHERE
+            product = 'Recurring')
+GROUP BY 1 , 2 , 3;
+
+#11. get merchants that were using basic api before lunch of recurring payments API and combined both post lunch. (1 merchant - 2x5fpa2a9k9 | 7,641 hits, 76,402,359 USD)
+SELECT DISTINCT
+    merchant,
+    SUM(usage_events) AS total_events,
+    SUM(usd_amount) AS amount_processed
+FROM
+    product_usage
+WHERE
+    merchant IN (SELECT DISTINCT
+            merchant
+        FROM
+            product_usage
+        WHERE
+            product = 'Basic API'
+                AND usage_date < '2016-05-01')
+        AND merchant IN (SELECT DISTINCT
+            merchant
+        FROM
+            product_usage
+        WHERE
+            product = 'Recurring')
+        AND merchant IN (SELECT DISTINCT
+            merchant
+        FROM
+            product_usage
+        WHERE
+            product = 'Basic API'
+                AND usage_date > '2016-05-01')
+GROUP BY 1;
+
+#12. get merchants that totally stopped using basic api and moved to recurring api after it lunched (1 merchant - 282t1vpldi, 699 hits/ 6,989,301 USD)
+SELECT DISTINCT
+    merchant,
+    SUM(usage_events) AS total_events,
+    SUM(usd_amount) AS amount_processed
+FROM
+    product_usage
+WHERE
+    merchant IN (SELECT DISTINCT
+            merchant
+        FROM
+            product_usage
+        WHERE
+            product = 'Basic API'
+                AND usage_date < '2016-05-01')
+        AND merchant IN (SELECT DISTINCT
+            merchant
+        FROM
+            product_usage
+        WHERE
+            product = 'Recurring')
+        AND merchant NOT IN (SELECT DISTINCT
+            merchant
+        FROM
+            product_usage
+        WHERE
+            product = 'Basic API'
+                AND usage_date > '2016-05-01')
+GROUP BY 1;
+
+#13. cart abandoned by merchant (which merchant is struggling to convert? how much additional revenue will be generated if we converted? you can do this on overall and merchant level)
+with main_query as (select distinct product_usage.merchant, api_call, sum(usage_events) as total_usage_events 
+from product_usage join segmentation on product_usage.merchant = segmentation.merchant 
+where product = 'Cart' 
+and api_call not in ('Cart.ViewItem', 'Cart.AddItem') 
+group by 1,2 
+)  ,
+window_fun as(
+select main_query.merchant, main_query.api_call, total_usage_events, 
+ROUND(100 * total_usage_events / sum(total_usage_events)
+			OVER (PARTITION BY merchant),     
+	 2) AS percent  
+from main_query
+), 
+cart_not_abandoned_cte as (
+select merchant, percent from window_fun
+where api_call = 'Cart.PaymentSubmit'
+)
+-- amount of TPV missed out if we have a goal of 30% conversion rate after checkout is initiated.
+select cart_not_abandoned_cte.merchant, percent as percentage_converted, sum(product_usage.usd_amount) as TPV_USD, round(((30 - percent)/100) * sum(product_usage.usd_amount),1) as TPV_missed_USD 
+from cart_not_abandoned_cte join product_usage on cart_not_abandoned_cte.merchant = product_usage.merchant
+group by 1,2;  
